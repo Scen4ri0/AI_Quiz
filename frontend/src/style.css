@@ -1,0 +1,144 @@
+:root {
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Noto Sans", "Liberation Sans", sans-serif;
+  line-height: 1.4;
+
+  --bg: #0b0c10;
+  --card: #111318;
+  --text: #e8e8e8;
+  --muted: #a9b0bc;
+  --border: #222633;
+
+  --ok: #2bd576;
+  --warn: #ffcc66;
+  --bad: #ff6b6b;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+}
+
+#app {
+  max-width: 920px;
+  margin: 0 auto;
+  padding: 28px 16px 40px;
+}
+
+.header h1 {
+  margin: 0 0 6px;
+  font-size: 28px;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 16px;
+  margin: 14px 0;
+}
+
+.row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.inline {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+input[type="text"], textarea {
+  width: 100%;
+  background: #0f1116;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  outline: none;
+}
+
+input[type="text"] {
+  min-width: 320px;
+}
+
+textarea {
+  resize: vertical;
+}
+
+button {
+  background: #1b2030;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.muted { color: var(--muted); }
+.small { font-size: 12px; }
+
+.question-block {
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+}
+
+.question-text {
+  margin-top: 6px;
+  white-space: pre-wrap;
+}
+
+.answer-form {
+  margin-top: 14px;
+  display: grid;
+  gap: 10px;
+}
+
+.result {
+  margin-top: 10px;
+  white-space: pre-wrap;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: #0f1116;
+}
+
+.result.ok { border-color: rgba(43, 213, 118, 0.45); }
+.result.warn { border-color: rgba(255, 204, 102, 0.45); }
+.result.bad { border-color: rgba(255, 107, 107, 0.45); }
+
+.footer {
+  margin-top: 12px;
+}
+
+.progressbar {
+  width: 100%;
+  height: 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: #0f1116;
+  overflow: hidden;
+}
+
+.progressbar-fill {
+  height: 100%;
+  width: 0%;
+  background: rgba(169, 176, 188, 0.35);
+}
+
+#btn-finish {
+  border-color: rgba(255, 204, 102, 0.45);
+}
+

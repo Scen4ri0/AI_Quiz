@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI Quiz</title>
+  </head>
+  <body>
+    <div id="app">
+      <header class="header">
+        <h1>AI Quiz</h1>
+        <p class="muted">Ответ проверяется через GigaChat</p>
+      </header>
+
+      <section class="card">
+        <div class="row">
+          <div class="row">
+            <button id="btn-prev" type="button">← Назад</button>
+            <button id="btn-next" type="button">Дальше →</button>
+            <button id="btn-finish" type="button">🏁 Завершить тест</button>
+          </div>
+
+          <div class="muted small" id="progress">Вопрос: —</div>
+          <div class="muted small" id="scoreline">Счёт: —</div>
+
+          <div class="progressbar" aria-hidden="true">
+            <div class="progressbar-fill" id="progressbar-fill"></div>
+          </div>
+
+          <label class="inline">
+            Backend URL:
+            <input id="backend-url" type="text" placeholder="http://localhost:8000" />
+          </label>
+
+          <button id="btn-reload" type="button">Перезагрузить список</button>
+          <button id="btn-reset-progress" type="button">Сбросить прогресс</button>
+        </div>
+
+        <div class="question-block">
+          <div class="muted small">Вопрос</div>
+          <div id="question-text" class="question-text">Загрузка…</div>
+          <div id="question-id" class="muted small"></div>
+          <div id="question-status" class="muted small"></div>
+        </div>
+
+        <form id="answer-form" class="answer-form">
+          <label class="muted small" for="answer">Ваш ответ (суть)</label>
+          <textarea id="answer" rows="6" placeholder="Напишите 1–2 ключевые идеи..."></textarea>
+
+          <div class="row">
+            <button id="btn-grade" type="submit">Проверить</button>
+            <button id="btn-clear" type="button">Очистить</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="card">
+        <div class="muted small">Результат</div>
+        <div id="result" class="result muted">Пока нет результата.</div>
+      </section>
+
+      <footer class="footer muted small">
+        <span>Подсказка: backend по умолчанию <code>http://localhost:8000</code></span>
+      </footer>
+    </div>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
