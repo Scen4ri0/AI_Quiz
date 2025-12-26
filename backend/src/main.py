@@ -25,7 +25,7 @@ BASE_DIR = Path(__file__).resolve().parent
 QUESTIONS_QUIZ1_PATH = BASE_DIR / "questions.json"
 QUESTIONS_QUIZ2_PATH = BASE_DIR / "questions_quiz2.json"
 
-PASS_SCORE = int(os.getenv("PASS_SCORE", "13"))
+PASS_SCORE = int(os.getenv("PASS_SCORE", "8"))
 
 
 def _load_questions_file(path: Path) -> list[dict[str, Any]]:
