@@ -15,6 +15,7 @@ export function initQuizPage({ quizId }) {
     quizCard: document.getElementById("quiz-card"),
 
     nickname: document.getElementById("nickname"),
+    public: document.getElementById("public"),
     backendUrl: document.getElementById("backend-url"),
     btnStart: document.getElementById("btn-start"),
     startHint: document.getElementById("start-hint"),
@@ -48,11 +49,10 @@ export function initQuizPage({ quizId }) {
     leaderboard: document.getElementById("leaderboard")
   };
 
-  // --- ключи localStorage разделяем по quizId, чтобы 2 теста не конфликтовали ---
   const STORAGE_INDEX_KEY = `ai_quiz_${quizId}_current_index_v1`;
   const STORAGE_PROGRESS_KEY = `ai_quiz_${quizId}_progress_v1`;
   const STORAGE_FINAL_KEY = `ai_quiz_${quizId}_final_v1`;
-  const STORAGE_PROFILE_KEY = `ai_quiz_${quizId}_profile_v1`; // nickname + session_id
+  const STORAGE_PROFILE_KEY = `ai_quiz_${quizId}_profile_v1`; // nickname + session_id (+public)
 
   const state = {
     quizId,
@@ -61,7 +61,7 @@ export function initQuizPage({ quizId }) {
     passScore: 13,
     progress: { answers: {} },
     final: null, // { passed, message }
-    profile: null // { nickname, session_id }
+    profile: null // { nickname, session_id, public }
   };
 
   function setResult(text, tone = "muted") {
@@ -75,11 +75,10 @@ export function initQuizPage({ quizId }) {
   }
 
   function lockUi(isLocked) {
-    // start
     els.nickname.disabled = isLocked;
+    if (els.public) els.public.disabled = isLocked;
     els.btnStart.disabled = isLocked;
 
-    // quiz
     els.btnPrev.disabled = isLocked;
     els.btnNext.disabled = isLocked;
     els.btnFinish.disabled = isLocked;
@@ -153,9 +152,10 @@ export function initQuizPage({ quizId }) {
       if (!raw) return null;
       const obj = JSON.parse(raw);
       if (!obj || typeof obj !== "object") return null;
-      if (typeof obj.nickname !== "string") return null;
       if (typeof obj.session_id !== "string") return null;
-      return { nickname: obj.nickname, session_id: obj.session_id };
+      const nickname = (typeof obj.nickname === "string") ? obj.nickname : "Гость";
+      const isPublic = (obj.public === true);
+      return { nickname, session_id: obj.session_id, public: isPublic };
     } catch {
       return null;
     }
@@ -200,7 +200,7 @@ export function initQuizPage({ quizId }) {
   }
 
   function renderWhoAmI() {
-    const nick = state.profile?.nickname || "—";
+    const nick = state.profile?.nickname || "Гость";
     els.whoami.textContent = `Игрок: ${nick}`;
   }
 
@@ -464,22 +464,19 @@ export function initQuizPage({ quizId }) {
   }
 
   async function onStart() {
-    const nickname = (els.nickname.value || "").trim();
-    if (!nickname) {
-      setResult("Введите никнейм, чтобы начать.", "bad");
-      return;
-    }
+    const nickname = (els.nickname?.value || "").trim();
+    const isPublic = !!(els.public?.checked);
 
     setResult("Создаю сессию…");
     lockUi(true);
 
     try {
-      const s = await startSession(getBackendUrl(), nickname, state.quizId);
+      const s = await startSession(getBackendUrl(), nickname, state.quizId, isPublic);
       const session_id = String(s?.session_id || "").trim();
-      const nick = String(s?.nickname || nickname).trim();
+      const nick = String(s?.nickname || (nickname || "Гость")).trim() || "Гость";
       if (!session_id) throw new Error("Сервер не вернул session_id");
 
-      state.profile = { nickname: nick, session_id };
+      state.profile = { nickname: nick, session_id, public: isPublic };
       saveProfile();
 
       showQuiz();
@@ -487,7 +484,10 @@ export function initQuizPage({ quizId }) {
       await loadQuestionsFromBackend();
       await refreshLeaderboard();
 
-      setResult(`Сессия создана ✅\nquiz_id: ${state.quizId}\nnickname: ${nick}\nsession_id: ${session_id}`, "ok");
+      setResult(
+        `Сессия создана ✅\nquiz_id: ${state.quizId}\nnickname: ${nick}\npublic: ${isPublic}\nsession_id: ${session_id}`,
+        "ok"
+      );
     } catch (e) {
       setResult(`Ошибка старта: ${e?.message || e}`, "bad");
     } finally {
@@ -502,8 +502,9 @@ export function initQuizPage({ quizId }) {
     state.progress = loadProgress();
     state.final = loadFinal();
 
-    if (state.profile?.session_id && state.profile?.nickname) {
-      els.nickname.value = state.profile.nickname;
+    if (state.profile?.session_id) {
+      if (els.nickname) els.nickname.value = (state.profile.nickname && state.profile.nickname !== "Гость") ? state.profile.nickname : "";
+      if (els.public) els.public.checked = state.profile.public === true;
       showQuiz();
     } else {
       showStart();

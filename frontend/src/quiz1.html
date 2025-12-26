@@ -26,8 +26,8 @@
 
         <div class="row">
           <label class="inline">
-            Никнейм:
-            <input id="nickname" type="text" placeholder="например: scen4ri0" maxlength="40" />
+            Никнейм (опционально):
+            <input id="nickname" type="text" placeholder="например: scen4ri0 (или оставь пустым)" maxlength="40" />
           </label>
 
           <label class="inline">
@@ -35,11 +35,16 @@
             <input id="backend-url" type="text" placeholder="http://localhost:8000" />
           </label>
 
+          <label class="inline muted small" title="Если выключить — ник не попадёт в таблицу лидеров">
+            <input id="public" type="checkbox" checked />
+            Показывать в рейтинге
+          </label>
+
           <button id="btn-start" type="button">🚀 Начать</button>
         </div>
 
         <div class="muted small" id="start-hint">
-          Никнейм нужен для рейтинга. Пароля нет — просто имя.
+          Никнейм можно не вводить — пройдёшь как «Гость» и в рейтинг не попадёшь.
         </div>
       </section>
 
