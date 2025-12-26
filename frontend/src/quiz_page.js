@@ -15,8 +15,8 @@ export function initQuizPage({ quizId }) {
     quizCard: document.getElementById("quiz-card"),
 
     nickname: document.getElementById("nickname"),
-    public: document.getElementById("public"),
     backendUrl: document.getElementById("backend-url"),
+    showInLeaderboard: document.getElementById("show-in-leaderboard"),
     btnStart: document.getElementById("btn-start"),
     startHint: document.getElementById("start-hint"),
 
@@ -52,7 +52,7 @@ export function initQuizPage({ quizId }) {
   const STORAGE_INDEX_KEY = `ai_quiz_${quizId}_current_index_v1`;
   const STORAGE_PROGRESS_KEY = `ai_quiz_${quizId}_progress_v1`;
   const STORAGE_FINAL_KEY = `ai_quiz_${quizId}_final_v1`;
-  const STORAGE_PROFILE_KEY = `ai_quiz_${quizId}_profile_v1`; // nickname + session_id (+public)
+  const STORAGE_PROFILE_KEY = `ai_quiz_${quizId}_profile_v2`; // обновили версию (добавили show_in_leaderboard)
 
   const state = {
     quizId,
@@ -61,7 +61,7 @@ export function initQuizPage({ quizId }) {
     passScore: 13,
     progress: { answers: {} },
     final: null, // { passed, message }
-    profile: null // { nickname, session_id, public }
+    profile: null // { nickname, session_id, show_in_leaderboard }
   };
 
   function setResult(text, tone = "muted") {
@@ -75,10 +75,12 @@ export function initQuizPage({ quizId }) {
   }
 
   function lockUi(isLocked) {
+    // start
     els.nickname.disabled = isLocked;
-    if (els.public) els.public.disabled = isLocked;
+    if (els.showInLeaderboard) els.showInLeaderboard.disabled = isLocked;
     els.btnStart.disabled = isLocked;
 
+    // quiz
     els.btnPrev.disabled = isLocked;
     els.btnNext.disabled = isLocked;
     els.btnFinish.disabled = isLocked;
@@ -152,10 +154,10 @@ export function initQuizPage({ quizId }) {
       if (!raw) return null;
       const obj = JSON.parse(raw);
       if (!obj || typeof obj !== "object") return null;
+      if (typeof obj.nickname !== "string") return null;
       if (typeof obj.session_id !== "string") return null;
-      const nickname = (typeof obj.nickname === "string") ? obj.nickname : "Гость";
-      const isPublic = (obj.public === true);
-      return { nickname, session_id: obj.session_id, public: isPublic };
+      const show = obj.show_in_leaderboard === true;
+      return { nickname: obj.nickname, session_id: obj.session_id, show_in_leaderboard: show };
     } catch {
       return null;
     }
@@ -200,8 +202,9 @@ export function initQuizPage({ quizId }) {
   }
 
   function renderWhoAmI() {
-    const nick = state.profile?.nickname || "Гость";
-    els.whoami.textContent = `Игрок: ${nick}`;
+    const nick = state.profile?.nickname || "—";
+    const pub = state.profile?.show_in_leaderboard === true ? " (в рейтинге)" : " (скрыто)";
+    els.whoami.textContent = `Игрок: ${nick}${pub}`;
   }
 
   function renderQuestionStatus(qid) {
@@ -253,7 +256,7 @@ export function initQuizPage({ quizId }) {
     if (total === 0) return;
     if (!state.profile?.session_id) return;
 
-    setResult("🏁 Фиксирую результат… сейчас будет отзыв 😎");
+    setResult("🏁 Фиксирую результат…");
     lockUi(true);
 
     try {
@@ -437,7 +440,8 @@ export function initQuizPage({ quizId }) {
       const c = Number(x.best_correct) || 0;
       const a = Number(x.best_answered) || 0;
       const t = String(x.last_activity_at || "—");
-      const me = (state.profile?.nickname && n === state.profile.nickname) ? `<span class="badge">ты</span>` : "";
+      const me = (state.profile?.nickname && n === state.profile.nickname && state.profile?.show_in_leaderboard)
+        ? `<span class="badge">ты</span>` : "";
       return `
         <div class="leaderboard-row">
           <div>${idx + 1}</div>
@@ -464,19 +468,26 @@ export function initQuizPage({ quizId }) {
   }
 
   async function onStart() {
-    const nickname = (els.nickname?.value || "").trim();
-    const isPublic = !!(els.public?.checked);
+    const nickname = (els.nickname.value || "").trim();
+    const show = els.showInLeaderboard ? (els.showInLeaderboard.checked === true) : false;
+
+    if (show && !nickname) {
+      setResult("Чтобы попасть в рейтинг, нужно указать никнейм (или снимите галочку «Показывать в рейтинге»).", "bad");
+      return;
+    }
 
     setResult("Создаю сессию…");
     lockUi(true);
 
     try {
-      const s = await startSession(getBackendUrl(), nickname, state.quizId, isPublic);
+      const s = await startSession(getBackendUrl(), nickname, state.quizId, show);
       const session_id = String(s?.session_id || "").trim();
-      const nick = String(s?.nickname || (nickname || "Гость")).trim() || "Гость";
+      const nick = String(s?.nickname || (nickname || "guest")).trim();
+      const pub = s?.show_in_leaderboard === true;
+
       if (!session_id) throw new Error("Сервер не вернул session_id");
 
-      state.profile = { nickname: nick, session_id, public: isPublic };
+      state.profile = { nickname: nick, session_id, show_in_leaderboard: pub };
       saveProfile();
 
       showQuiz();
@@ -485,7 +496,7 @@ export function initQuizPage({ quizId }) {
       await refreshLeaderboard();
 
       setResult(
-        `Сессия создана ✅\nquiz_id: ${state.quizId}\nnickname: ${nick}\npublic: ${isPublic}\nsession_id: ${session_id}`,
+        `Сессия создана ✅\nquiz_id: ${state.quizId}\nnickname: ${nick}\nshow_in_leaderboard: ${pub}\nsession_id: ${session_id}`,
         "ok"
       );
     } catch (e) {
@@ -502,9 +513,9 @@ export function initQuizPage({ quizId }) {
     state.progress = loadProgress();
     state.final = loadFinal();
 
-    if (state.profile?.session_id) {
-      if (els.nickname) els.nickname.value = (state.profile.nickname && state.profile.nickname !== "Гость") ? state.profile.nickname : "";
-      if (els.public) els.public.checked = state.profile.public === true;
+    if (state.profile?.session_id && state.profile?.nickname) {
+      els.nickname.value = state.profile.nickname.startsWith("guest-") ? "" : state.profile.nickname;
+      if (els.showInLeaderboard) els.showInLeaderboard.checked = state.profile.show_in_leaderboard === true;
       showQuiz();
     } else {
       showStart();

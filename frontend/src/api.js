@@ -3,6 +3,23 @@ function normalizeBaseUrl(baseUrl) {
   return url.endsWith("/") ? url.slice(0, -1) : url;
 }
 
+function formatFastApiDetail(detail) {
+  // FastAPI validation errors часто приходят как массив объектов
+  if (Array.isArray(detail)) {
+    return detail
+      .map((x) => {
+        const loc = Array.isArray(x?.loc) ? x.loc.join(".") : "";
+        const msg = x?.msg ? String(x.msg) : JSON.stringify(x);
+        return loc ? `${loc}: ${msg}` : msg;
+      })
+      .join("\n");
+  }
+  if (detail && typeof detail === "object") {
+    try { return JSON.stringify(detail); } catch { return String(detail); }
+  }
+  return String(detail || "");
+}
+
 async function httpJson(url, options = {}) {
   const res = await fetch(url, {
     ...options,
@@ -21,7 +38,8 @@ async function httpJson(url, options = {}) {
   }
 
   if (!res.ok) {
-    const detail = data?.detail || data?.raw || `HTTP ${res.status}`;
+    const detailRaw = data?.detail ?? data?.raw ?? `HTTP ${res.status}`;
+    const detail = formatFastApiDetail(detailRaw) || `HTTP ${res.status}`;
     throw new Error(detail);
   }
 
@@ -40,11 +58,15 @@ export async function getQuestions(baseUrl, quizId) {
   return httpJson(`${b}/api/questions${q}`, { method: "GET" });
 }
 
-export async function startSession(baseUrl, nickname, quizId) {
+export async function startSession(baseUrl, nickname, quizId, showInLeaderboard) {
   const b = normalizeBaseUrl(baseUrl);
   return httpJson(`${b}/api/start`, {
     method: "POST",
-    body: JSON.stringify({ nickname, quiz_id: quizId })
+    body: JSON.stringify({
+      nickname: (nickname || "").trim() || null,
+      quiz_id: quizId,
+      show_in_leaderboard: showInLeaderboard === true
+    })
   });
 }
 

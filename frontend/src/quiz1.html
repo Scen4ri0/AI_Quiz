@@ -32,11 +32,11 @@
 
           <label class="inline">
             Backend URL:
-            <input id="backend-url" type="text" placeholder="http://localhost:8000" />
+            <input id="backend-url" type="text" placeholder="http://84.23.54.6:8000" />
           </label>
 
-          <label class="inline muted small" title="Если выключить — ник не попадёт в таблицу лидеров">
-            <input id="public" type="checkbox" checked />
+          <label class="inline">
+            <input id="show-in-leaderboard" type="checkbox" />
             Показывать в рейтинге
           </label>
 
@@ -44,7 +44,7 @@
         </div>
 
         <div class="muted small" id="start-hint">
-          Никнейм можно не вводить — пройдёшь как «Гость» и в рейтинг не попадёшь.
+          Ник можно не вводить — пройдёшь как гость и в рейтинг не попадёшь. Чтобы попасть в рейтинг, включи галочку и укажи ник.
         </div>
       </section>
 
@@ -109,7 +109,7 @@
       </section>
 
       <footer class="footer muted small">
-        <span>Подсказка: backend по умолчанию <code>http://localhost:8000</code></span>
+        <span>Подсказка: backend по умолчанию <code>http://84.23.54.6:8000</code></span>
       </footer>
     </div>
 
