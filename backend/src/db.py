@@ -87,10 +87,12 @@ def init_db() -> None:
         if "last_seen_at" not in cols_u:
             conn.execute("ALTER TABLE users ADD COLUMN last_seen_at TEXT NOT NULL DEFAULT (datetime('now'));")
 
-        # --- миграции sessions: quiz_id ---
+        # --- миграции sessions: quiz_id + is_public ---
         cols_s = _table_columns(conn, "sessions")
         if "quiz_id" not in cols_s:
             conn.execute("ALTER TABLE sessions ADD COLUMN quiz_id TEXT NOT NULL DEFAULT 'quiz1';")
+        if "is_public" not in cols_s:
+            conn.execute("ALTER TABLE sessions ADD COLUMN is_public INTEGER NOT NULL DEFAULT 1;")
 
         conn.commit()
     finally:
@@ -114,39 +116,58 @@ def _get_or_create_user(conn: sqlite3.Connection, nickname: str) -> int:
     return int(cur.lastrowid)
 
 
-def create_session(nickname: str, total: int, pass_score: int, quiz_id: str) -> dict[str, Any]:
+def _guest_nickname() -> str:
+    # короткий, уникальный, без пробелов
+    return f"guest-{uuid.uuid4().hex[:8]}"
+
+
+def create_session(nickname: str | None, total: int, pass_score: int, quiz_id: str, is_public: bool) -> dict[str, Any]:
     """
     Создает новую попытку (сессию) для конкретного quiz_id.
-    Накопительные очки — в users и обновляются при /api/grade.
+    Если nickname не задан — создаём гостевой ник и принудительно is_public=false.
+    Накопительные очки — в users и обновляются при /api/grade ТОЛЬКО если is_public=1.
     """
     qid = (quiz_id or "").strip() or "quiz1"
 
+    nn = _norm_nickname(nickname or "")
+    if not nn:
+        nn = _guest_nickname()
+        is_public = False  # гостя не показываем
+
+    pub_int = 1 if is_public else 0
+
     conn = _connect()
     try:
-        user_id = _get_or_create_user(conn, nickname)
+        user_id = _get_or_create_user(conn, nn)
         sid = str(uuid.uuid4())
 
         conn.execute(
             """
-            INSERT INTO sessions(id, user_id, total, pass_score, quiz_id)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO sessions(id, user_id, total, pass_score, quiz_id, is_public)
+            VALUES (?, ?, ?, ?, ?, ?)
             """,
-            (sid, user_id, int(total), int(pass_score), qid),
+            (sid, user_id, int(total), int(pass_score), qid, pub_int),
         )
 
-        # attempts++ и last_seen_at обновляем при старте
-        conn.execute(
-            """
-            UPDATE users
-            SET attempts = attempts + 1,
-                last_seen_at = datetime('now')
-            WHERE id = ?
-            """,
-            (user_id,),
-        )
+        # attempts++ считаем только публичные попытки (чтобы скрытые не светились статистикой)
+        if pub_int == 1:
+            conn.execute(
+                """
+                UPDATE users
+                SET attempts = attempts + 1,
+                    last_seen_at = datetime('now')
+                WHERE id = ?
+                """,
+                (user_id,),
+            )
+        else:
+            conn.execute(
+                "UPDATE users SET last_seen_at = datetime('now') WHERE id = ?",
+                (user_id,),
+            )
 
         conn.commit()
-        return {"session_id": sid, "nickname": _norm_nickname(nickname), "quiz_id": qid}
+        return {"session_id": sid, "nickname": nn, "quiz_id": qid, "is_public": bool(pub_int)}
     finally:
         conn.close()
 
@@ -157,7 +178,7 @@ def get_session_meta(session_id: str) -> Optional[dict[str, Any]]:
         row = conn.execute(
             """
             SELECT s.id, s.correct, s.answered, s.total, s.pass_score, s.started_at, s.finished_at,
-                   s.quiz_id,
+                   s.quiz_id, s.is_public,
                    u.nickname
             FROM sessions s
             JOIN users u ON u.id = s.user_id
@@ -189,16 +210,17 @@ def apply_answer_result(
     """
     1) Сохраняет ответ (answers) в рамках session_id + qid.
     2) Обновляет счетчики текущей сессии (sessions.correct/answered).
-    3) Обновляет НАКОПИТЕЛЬНЫЕ счетчики пользователя (users.total_correct/total_answered).
+    3) Обновляет НАКОПИТЕЛЬНЫЕ счетчики пользователя (users.total_correct/total_answered)
+       ТОЛЬКО если sessions.is_public = 1.
 
     Корректно обрабатывает:
-    - первый ответ на вопрос в сессии => answered +1 (и пользователю тоже)
-    - переответ в той же сессии с изменением ok => correct +/-1 (и пользователю тоже)
+    - первый ответ на вопрос в сессии => answered +1
+    - переответ в той же сессии с изменением ok => correct +/-1
     """
     conn = _connect()
     try:
         s = conn.execute(
-            "SELECT id, user_id, correct, answered, total, pass_score FROM sessions WHERE id = ?",
+            "SELECT id, user_id, correct, answered, total, pass_score, is_public FROM sessions WHERE id = ?",
             (session_id,),
         ).fetchone()
         if not s:
@@ -207,6 +229,7 @@ def apply_answer_result(
         user_id = int(s["user_id"])
         session_correct = int(s["correct"])
         session_answered = int(s["answered"])
+        is_public = int(s["is_public"]) == 1
 
         prev = conn.execute(
             "SELECT ok FROM answers WHERE session_id = ? AND qid = ?",
@@ -262,7 +285,8 @@ def apply_answer_result(
             (session_correct, session_answered, session_id),
         )
 
-        if delta_answered != 0 or delta_correct != 0:
+        # ✅ накопительные totals обновляем ТОЛЬКО для публичных сессий
+        if is_public and (delta_answered != 0 or delta_correct != 0):
             conn.execute(
                 """
                 UPDATE users
@@ -311,10 +335,11 @@ def finish_session(session_id: str) -> None:
 
 def leaderboard(limit: int = 20) -> list[dict[str, Any]]:
     """
-    Лидерборд по пользователю (nickname), накопительный:
-      total_correct DESC, затем total_answered DESC, затем last_seen_at DESC
+    Лидерборд по пользователю (nickname), накопительный.
+    Т.к. totals обновляются только для публичных сессий,
+    скрытые/гостевые прохождения сюда не попадут.
 
-    ВАЖНО: возвращаем поля, которые ждёт фронт:
+    Возвращаем поля, которые ждёт фронт:
       best_correct, best_answered, last_activity_at
     """
     lim = max(1, min(int(limit), 200))
@@ -329,6 +354,7 @@ def leaderboard(limit: int = 20) -> list[dict[str, Any]]:
               attempts,
               last_seen_at AS last_activity_at
             FROM users
+            WHERE total_answered > 0 OR total_correct > 0 OR attempts > 0
             ORDER BY total_correct DESC, total_answered DESC, last_seen_at DESC
             LIMIT ?
             """,

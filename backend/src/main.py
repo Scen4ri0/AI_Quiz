@@ -48,7 +48,7 @@ QUIZ_TITLES: dict[str, str] = {
     "quiz2": "Тест 2 (RAG / Vector DB / Agents)",
 }
 
-app = FastAPI(title="AI Quiz Backend", version="0.8.0")
+app = FastAPI(title="AI Quiz Backend", version="0.9.0")
 
 frontend_origin = os.getenv("FRONTEND_ORIGIN", "http://localhost:5173")
 app.add_middleware(
@@ -98,8 +98,19 @@ class QuizzesOut(BaseModel):
 
 
 class StartIn(BaseModel):
-    nickname: str = Field(..., min_length=1, max_length=40, description="Имя/ник без пароля")
+    # ✅ nickname теперь НЕ обязательный
+    nickname: str | None = Field(
+        None,
+        min_length=0,
+        max_length=40,
+        description="Имя/ник без пароля. Можно не вводить — будет гостевой проход.",
+    )
     quiz_id: str = Field("quiz1", description="ID теста: quiz1 или quiz2")
+    # ✅ флаг: показывать или нет в рейтинге
+    show_in_leaderboard: bool = Field(
+        False,
+        description="Если true — попытка будет учитываться в лидерборде. Если nickname пустой, всегда false.",
+    )
 
 
 class StartOut(BaseModel):
@@ -108,6 +119,7 @@ class StartOut(BaseModel):
     quiz_id: str
     total: int
     pass_score: int
+    show_in_leaderboard: bool
 
 
 class GradeIn(BaseModel):
@@ -187,23 +199,31 @@ def list_questions(quiz: str = "quiz1") -> QuestionsListOut:
 
 @app.post("/api/start", response_model=StartOut)
 def start(payload: StartIn) -> StartOut:
-    nickname = " ".join(payload.nickname.strip().split())
-    if not nickname:
-        raise HTTPException(status_code=400, detail="Nickname is empty")
-    if len(nickname) > 40:
-        raise HTTPException(status_code=400, detail="Nickname is too long (max 40)")
+    # ✅ nickname может быть пустым/None
+    raw = (payload.nickname or "").strip()
+    nickname = " ".join(raw.split())  # нормализация пробелов
 
     quiz_id = _require_quiz_id(payload.quiz_id)
     total = len(QUESTIONS_BY_QUIZ[quiz_id])
 
+    # ✅ если ника нет — это всегда "скрытый" гостевой проход
+    show = bool(payload.show_in_leaderboard) and bool(nickname)
+
     try:
-        s = create_session(nickname=nickname, total=total, pass_score=PASS_SCORE, quiz_id=quiz_id)
+        s = create_session(
+            nickname=nickname if nickname else None,
+            total=total,
+            pass_score=PASS_SCORE,
+            quiz_id=quiz_id,
+            is_public=show,
+        )
         return StartOut(
-          session_id=str(s["session_id"]),
-          nickname=str(s["nickname"]),
-          quiz_id=str(s["quiz_id"]),
-          total=total,
-          pass_score=PASS_SCORE,
+            session_id=str(s["session_id"]),
+            nickname=str(s["nickname"]),
+            quiz_id=str(s["quiz_id"]),
+            total=total,
+            pass_score=PASS_SCORE,
+            show_in_leaderboard=bool(s["is_public"]),
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -216,7 +236,6 @@ def start(payload: StartIn) -> StartOut:
 
 @app.post("/api/grade", response_model=GradeOut)
 def grade(payload: GradeIn) -> GradeOut:
-    # 1) узнаём quiz_id из сессии
     meta_s = get_session_meta(payload.session_id)
     if not meta_s:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -224,7 +243,6 @@ def grade(payload: GradeIn) -> GradeOut:
     quiz_id = str(meta_s.get("quiz_id") or "quiz1")
     quiz_id = _require_quiz_id(quiz_id)
 
-    # 2) берём вопрос из соответствующего теста
     qs = QUESTIONS_BY_QUIZ[quiz_id]
     q = next((x for x in qs if x.get("id") == payload.id), None)
     if not q:
@@ -264,7 +282,6 @@ def grade(payload: GradeIn) -> GradeOut:
 
 @app.post("/api/final_feedback", response_model=FinalFeedbackOut)
 def final_feedback_api(payload: FinalFeedbackIn) -> FinalFeedbackOut:
-    # endpoint не должен падать из-за LLM
     try:
         finish_session(payload.session_id)
 
@@ -286,7 +303,6 @@ def final_feedback_api(payload: FinalFeedbackIn) -> FinalFeedbackOut:
     except HTTPException:
         raise
     except Exception:
-        # безопасный фолбэк
         return final_feedback_safe(
             correct=0,
             answered=0,
