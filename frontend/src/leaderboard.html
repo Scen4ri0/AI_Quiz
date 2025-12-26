@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI Quiz — Leaderboard</title>
+  </head>
+  <body>
+    <div id="app">
+      <header class="header">
+        <h1>🏆 Таблица лидеров</h1>
+        <p class="muted">Суммарный прогресс по пользователю (все попытки)</p>
+      </header>
+
+      <section class="card">
+        <div class="row">
+          <a class="linkbtn" href="/index.html">← Домой</a>
+
+          <label class="inline">
+            Backend URL:
+            <input id="backend-url" type="text" placeholder="http://localhost:8000" />
+          </label>
+
+          <button id="btn-refresh" type="button">Обновить</button>
+        </div>
+
+        <div class="muted small" style="margin-top:10px;">
+          Сортировка: лучший correct, потом answered, потом свежесть
+        </div>
+
+        <div id="leaderboard" class="leaderboard muted small" style="margin-top:10px;">
+          Загрузка…
+        </div>
+
+        <div id="result" class="result muted" style="margin-top:12px;">—</div>
+      </section>
+
+      <footer class="footer muted small">
+        <span>AI Quiz · leaderboard</span>
+      </footer>
+    </div>
+
+    <script type="module" src="/leaderboard.js"></script>
+  </body>
+</html>

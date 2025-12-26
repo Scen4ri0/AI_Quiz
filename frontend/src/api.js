@@ -28,28 +28,45 @@ async function httpJson(url, options = {}) {
   return data;
 }
 
-export async function getMeta(baseUrl) {
+export async function getMeta(baseUrl, quizId) {
   const b = normalizeBaseUrl(baseUrl);
-  return httpJson(`${b}/api/meta`, { method: "GET" });
+  const q = quizId ? `?quiz=${encodeURIComponent(quizId)}` : "";
+  return httpJson(`${b}/api/meta${q}`, { method: "GET" });
 }
 
-export async function getQuestions(baseUrl) {
+export async function getQuestions(baseUrl, quizId) {
   const b = normalizeBaseUrl(baseUrl);
-  return httpJson(`${b}/api/questions`, { method: "GET" });
+  const q = quizId ? `?quiz=${encodeURIComponent(quizId)}` : "";
+  return httpJson(`${b}/api/questions${q}`, { method: "GET" });
 }
 
-export async function gradeAnswer(baseUrl, id, answer) {
+export async function startSession(baseUrl, nickname, quizId) {
   const b = normalizeBaseUrl(baseUrl);
-  return httpJson(`${b}/api/grade`, {
+  return httpJson(`${b}/api/start`, {
     method: "POST",
-    body: JSON.stringify({ id, answer })
+    body: JSON.stringify({ nickname, quiz_id: quizId })
   });
 }
 
-export async function getFinalFeedback(baseUrl, correct, answered) {
+export async function gradeAnswer(baseUrl, session_id, id, answer) {
+  const b = normalizeBaseUrl(baseUrl);
+  return httpJson(`${b}/api/grade`, {
+    method: "POST",
+    body: JSON.stringify({ session_id, id, answer })
+  });
+}
+
+export async function getFinalFeedback(baseUrl, session_id) {
   const b = normalizeBaseUrl(baseUrl);
   return httpJson(`${b}/api/final_feedback`, {
     method: "POST",
-    body: JSON.stringify({ correct, answered })
+    body: JSON.stringify({ session_id })
+  });
+}
+
+export async function getLeaderboard(baseUrl, limit = 20) {
+  const b = normalizeBaseUrl(baseUrl);
+  return httpJson(`${b}/api/leaderboard?limit=${encodeURIComponent(limit)}`, {
+    method: "GET"
   });
 }

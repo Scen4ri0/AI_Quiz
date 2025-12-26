@@ -85,6 +85,20 @@ button:disabled {
   cursor: not-allowed;
 }
 
+.linkbtn {
+  display: inline-block;
+  text-decoration: none;
+  background: #1b2030;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.linkbtn:hover {
+  filter: brightness(1.08);
+}
+
 .muted { color: var(--muted); }
 .small { font-size: 12px; }
 
@@ -142,3 +156,35 @@ button:disabled {
   border-color: rgba(255, 204, 102, 0.45);
 }
 
+.leaderboard {
+  margin-top: 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.leaderboard-row {
+  display: grid;
+  grid-template-columns: 48px 1.2fr 1fr 1fr 1.2fr;
+  gap: 10px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--border);
+}
+
+.leaderboard-row:first-child {
+  border-top: none;
+}
+
+.leaderboard-head {
+  background: #0f1116;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: #0f1116;
+}

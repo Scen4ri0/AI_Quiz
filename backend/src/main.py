@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from grader import GradeResult, grade_answer, FinalFeedbackOut, final_feedback_safe
+from db import init_db, create_session, apply_answer_result, finish_session, leaderboard, get_session_meta
 
 # --- Загружаем backend/.env, если он есть ---
 try:
@@ -21,24 +22,33 @@ except Exception:
     pass
 
 BASE_DIR = Path(__file__).resolve().parent
-QUESTIONS_PATH = BASE_DIR / "questions.json"
+QUESTIONS_QUIZ1_PATH = BASE_DIR / "questions.json"
+QUESTIONS_QUIZ2_PATH = BASE_DIR / "questions_quiz2.json"
 
 PASS_SCORE = int(os.getenv("PASS_SCORE", "13"))
 
 
-def load_questions() -> list[dict[str, Any]]:
-    if not QUESTIONS_PATH.exists():
-        raise RuntimeError(f"questions.json not found at: {QUESTIONS_PATH}")
-    with QUESTIONS_PATH.open("r", encoding="utf-8") as f:
+def _load_questions_file(path: Path) -> list[dict[str, Any]]:
+    if not path.exists():
+        raise RuntimeError(f"questions file not found at: {path}")
+    with path.open("r", encoding="utf-8") as f:
         data = json.load(f)
     if not isinstance(data, list):
-        raise RuntimeError("questions.json must contain a JSON array")
+        raise RuntimeError(f"{path.name} must contain a JSON array")
     return data
 
 
-QUESTIONS = load_questions()
+QUESTIONS_BY_QUIZ: dict[str, list[dict[str, Any]]] = {
+    "quiz1": _load_questions_file(QUESTIONS_QUIZ1_PATH),
+    "quiz2": _load_questions_file(QUESTIONS_QUIZ2_PATH),
+}
 
-app = FastAPI(title="AI Quiz Backend", version="0.6.0")
+QUIZ_TITLES: dict[str, str] = {
+    "quiz1": "Тест 1 (LLM основы)",
+    "quiz2": "Тест 2 (RAG / Vector DB / Agents)",
+}
+
+app = FastAPI(title="AI Quiz Backend", version="0.8.0")
 
 frontend_origin = os.getenv("FRONTEND_ORIGIN", "http://localhost:5173")
 app.add_middleware(
@@ -52,31 +62,80 @@ app.add_middleware(
 DEBUG = os.getenv("DEBUG", "false").strip().lower() in {"1", "true", "yes", "y", "on"}
 
 
+@app.on_event("startup")
+def _startup() -> None:
+    init_db()
+
+
 class QuestionOut(BaseModel):
     id: str
     question: str
 
 
 class QuestionsListOut(BaseModel):
+    quiz_id: str
     questions: list[QuestionOut]
     total: int
     pass_score: int
 
 
 class QuizMetaOut(BaseModel):
+    quiz_id: str
+    title: str
+    total: int
+    pass_score: int
+
+
+class QuizItemOut(BaseModel):
+    quiz_id: str
+    title: str
+    total: int
+    pass_score: int
+
+
+class QuizzesOut(BaseModel):
+    items: list[QuizItemOut]
+
+
+class StartIn(BaseModel):
+    nickname: str = Field(..., min_length=1, max_length=40, description="Имя/ник без пароля")
+    quiz_id: str = Field("quiz1", description="ID теста: quiz1 или quiz2")
+
+
+class StartOut(BaseModel):
+    session_id: str
+    nickname: str
+    quiz_id: str
     total: int
     pass_score: int
 
 
 class GradeIn(BaseModel):
-    id: str = Field(..., description="ID вопроса из questions.json")
+    session_id: str = Field(..., min_length=8, description="ID сессии из /api/start")
+    id: str = Field(..., description="ID вопроса из questions")
     answer: str = Field(..., min_length=1, description="Короткий ответ пользователя (суть)")
 
 
+class GradeOut(GradeResult):
+    correct: int
+    answered: int
+    total: int
+    pass_score: int
+
+
 class FinalFeedbackIn(BaseModel):
-    correct: int = Field(..., ge=0)
-    answered: int | None = Field(default=None, ge=0)
-    total: int | None = Field(default=None, ge=1)
+    session_id: str = Field(..., min_length=8)
+
+
+class LeaderboardOut(BaseModel):
+    items: list[dict[str, Any]]
+
+
+def _require_quiz_id(quiz_id: str | None) -> str:
+    q = (quiz_id or "").strip() or "quiz1"
+    if q not in QUESTIONS_BY_QUIZ:
+        raise HTTPException(status_code=400, detail=f"Unknown quiz_id: {q}")
+    return q
 
 
 @app.get("/health")
@@ -84,47 +143,118 @@ def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+@app.get("/api/quizzes", response_model=QuizzesOut)
+def quizzes() -> QuizzesOut:
+    items: list[QuizItemOut] = []
+    for qid, qs in QUESTIONS_BY_QUIZ.items():
+        items.append(
+            QuizItemOut(
+                quiz_id=qid,
+                title=QUIZ_TITLES.get(qid, qid),
+                total=len(qs),
+                pass_score=PASS_SCORE,
+            )
+        )
+    return QuizzesOut(items=items)
+
+
 @app.get("/api/meta", response_model=QuizMetaOut)
-def meta() -> QuizMetaOut:
-    return QuizMetaOut(total=len(QUESTIONS), pass_score=PASS_SCORE)
+def meta(quiz: str = "quiz1") -> QuizMetaOut:
+    qid = _require_quiz_id(quiz)
+    qs = QUESTIONS_BY_QUIZ[qid]
+    return QuizMetaOut(
+        quiz_id=qid,
+        title=QUIZ_TITLES.get(qid, qid),
+        total=len(qs),
+        pass_score=PASS_SCORE,
+    )
 
 
 @app.get("/api/questions", response_model=QuestionsListOut)
-def list_questions() -> QuestionsListOut:
+def list_questions(quiz: str = "quiz1") -> QuestionsListOut:
+    qid = _require_quiz_id(quiz)
+    qs = QUESTIONS_BY_QUIZ[qid]
+
     out: list[QuestionOut] = []
-    for q in QUESTIONS:
-        qid = q.get("id")
+    for q in qs:
+        qqid = q.get("id")
         text = q.get("question")
-        if isinstance(qid, str) and isinstance(text, str) and text.strip():
-            out.append(QuestionOut(id=qid, question=text))
-    return QuestionsListOut(questions=out, total=len(out), pass_score=PASS_SCORE)
+        if isinstance(qqid, str) and isinstance(text, str) and text.strip():
+            out.append(QuestionOut(id=qqid, question=text))
+
+    return QuestionsListOut(quiz_id=qid, questions=out, total=len(out), pass_score=PASS_SCORE)
 
 
-@app.get("/api/questions/{question_id}", response_model=QuestionOut)
-def get_question(question_id: str) -> QuestionOut:
-    q = next((x for x in QUESTIONS if x.get("id") == question_id), None)
-    if not q:
-        raise HTTPException(status_code=404, detail="Question not found")
+@app.post("/api/start", response_model=StartOut)
+def start(payload: StartIn) -> StartOut:
+    nickname = " ".join(payload.nickname.strip().split())
+    if not nickname:
+        raise HTTPException(status_code=400, detail="Nickname is empty")
+    if len(nickname) > 40:
+        raise HTTPException(status_code=400, detail="Nickname is too long (max 40)")
 
-    question = q.get("question")
-    if not isinstance(question, str) or not question.strip():
-        raise HTTPException(status_code=500, detail="Invalid question in questions.json")
-
-    return QuestionOut(id=question_id, question=question)
-
-
-@app.post("/api/grade", response_model=GradeResult)
-def grade(payload: GradeIn) -> GradeResult:
-    q = next((x for x in QUESTIONS if x.get("id") == payload.id), None)
-    if not q:
-        raise HTTPException(status_code=404, detail="Question not found")
-
-    question = q.get("question")
-    if not isinstance(question, str) or not question.strip():
-        raise HTTPException(status_code=500, detail="Invalid question in questions.json")
+    quiz_id = _require_quiz_id(payload.quiz_id)
+    total = len(QUESTIONS_BY_QUIZ[quiz_id])
 
     try:
-        return grade_answer(question=question, user_answer=payload.answer)
+        s = create_session(nickname=nickname, total=total, pass_score=PASS_SCORE, quiz_id=quiz_id)
+        return StartOut(
+          session_id=str(s["session_id"]),
+          nickname=str(s["nickname"]),
+          quiz_id=str(s["quiz_id"]),
+          total=total,
+          pass_score=PASS_SCORE,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        traceback.print_exc()
+        if DEBUG:
+            raise HTTPException(status_code=500, detail=f"Start failed: {type(e).__name__}: {e}")
+        raise HTTPException(status_code=500, detail="Start failed")
+
+
+@app.post("/api/grade", response_model=GradeOut)
+def grade(payload: GradeIn) -> GradeOut:
+    # 1) узнаём quiz_id из сессии
+    meta_s = get_session_meta(payload.session_id)
+    if not meta_s:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    quiz_id = str(meta_s.get("quiz_id") or "quiz1")
+    quiz_id = _require_quiz_id(quiz_id)
+
+    # 2) берём вопрос из соответствующего теста
+    qs = QUESTIONS_BY_QUIZ[quiz_id]
+    q = next((x for x in qs if x.get("id") == payload.id), None)
+    if not q:
+        raise HTTPException(status_code=404, detail="Question not found")
+
+    question = q.get("question")
+    if not isinstance(question, str) or not question.strip():
+        raise HTTPException(status_code=500, detail="Invalid question in questions file")
+
+    try:
+        res = grade_answer(question=question, user_answer=payload.answer)
+
+        stats = apply_answer_result(
+            session_id=payload.session_id,
+            qid=payload.id,
+            answer=payload.answer,
+            ok=bool(res.ok),
+            feedback=str(res.feedback or ""),
+        )
+
+        return GradeOut(
+            ok=res.ok,
+            feedback=res.feedback,
+            correct=stats.correct,
+            answered=stats.answered,
+            total=stats.total,
+            pass_score=stats.pass_score,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         traceback.print_exc()
         if DEBUG:
@@ -134,21 +264,44 @@ def grade(payload: GradeIn) -> GradeResult:
 
 @app.post("/api/final_feedback", response_model=FinalFeedbackOut)
 def final_feedback_api(payload: FinalFeedbackIn) -> FinalFeedbackOut:
-    # ВАЖНО: этот endpoint НЕ должен падать из-за LLM.
-    server_total = len(QUESTIONS)
+    # endpoint не должен падать из-за LLM
+    try:
+        finish_session(payload.session_id)
 
-    total = server_total
-    if payload.total is not None:
-        # но сервер всё равно является источником истины
-        total = server_total
+        meta_s = get_session_meta(payload.session_id)
+        if not meta_s:
+            raise HTTPException(status_code=404, detail="Session not found")
 
-    answered = payload.answered if payload.answered is not None else server_total
-    correct = int(payload.correct)
+        total = int(meta_s["total"])
+        answered = int(meta_s["answered"])
+        correct = int(meta_s["correct"])
+        pass_score = int(meta_s["pass_score"])
 
-    # Возвращаем всегда 200 с безопасным результатом
-    return final_feedback_safe(
-        correct=correct,
-        answered=int(answered),
-        total=int(total),
-        pass_score=PASS_SCORE,
-    )
+        return final_feedback_safe(
+            correct=correct,
+            answered=answered,
+            total=total,
+            pass_score=pass_score,
+        )
+    except HTTPException:
+        raise
+    except Exception:
+        # безопасный фолбэк
+        return final_feedback_safe(
+            correct=0,
+            answered=0,
+            total=1,
+            pass_score=PASS_SCORE,
+        )
+
+
+@app.get("/api/leaderboard", response_model=LeaderboardOut)
+def leaderboard_api(limit: int = 20) -> LeaderboardOut:
+    try:
+        items = leaderboard(limit=limit)
+        return LeaderboardOut(items=items)
+    except Exception as e:
+        traceback.print_exc()
+        if DEBUG:
+            raise HTTPException(status_code=500, detail=f"Leaderboard failed: {type(e).__name__}: {e}")
+        raise HTTPException(status_code=500, detail="Leaderboard failed")
