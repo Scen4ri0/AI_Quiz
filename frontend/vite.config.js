@@ -10,6 +10,7 @@ export default defineConfig({
         home: resolve(__dirname, "src/index.html"),
         quiz1: resolve(__dirname, "src/quiz1.html"),
         quiz2: resolve(__dirname, "src/quiz2.html"),
+        quiz3: resolve(__dirname, "src/quiz3.html"), // ✅ NEW
         leaderboard: resolve(__dirname, "src/leaderboard.html"),
       }
     }

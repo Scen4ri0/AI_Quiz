@@ -24,6 +24,7 @@ except Exception:
 BASE_DIR = Path(__file__).resolve().parent
 QUESTIONS_QUIZ1_PATH = BASE_DIR / "questions.json"
 QUESTIONS_QUIZ2_PATH = BASE_DIR / "questions_quiz2.json"
+QUESTIONS_QUIZ3_PATH = BASE_DIR / "questions_quiz3.json"  # ✅ NEW
 
 PASS_SCORE = int(os.getenv("PASS_SCORE", "8"))
 
@@ -41,11 +42,13 @@ def _load_questions_file(path: Path) -> list[dict[str, Any]]:
 QUESTIONS_BY_QUIZ: dict[str, list[dict[str, Any]]] = {
     "quiz1": _load_questions_file(QUESTIONS_QUIZ1_PATH),
     "quiz2": _load_questions_file(QUESTIONS_QUIZ2_PATH),
+    "quiz3": _load_questions_file(QUESTIONS_QUIZ3_PATH),  # ✅ NEW
 }
 
 QUIZ_TITLES: dict[str, str] = {
     "quiz1": "Тест 1 (LLM основы)",
     "quiz2": "Тест 2 (RAG / Vector DB / Agents)",
+    "quiz3": "Тест 3 (Embeddings / BoW / Semantic Search)",  # ✅ NEW
 }
 
 app = FastAPI(title="AI Quiz Backend", version="0.9.0")
@@ -105,7 +108,7 @@ class StartIn(BaseModel):
         max_length=40,
         description="Имя/ник без пароля. Можно не вводить — будет гостевой проход.",
     )
-    quiz_id: str = Field("quiz1", description="ID теста: quiz1 или quiz2")
+    quiz_id: str = Field("quiz1", description="ID теста: quiz1, quiz2 или quiz3")
     # ✅ флаг: показывать или нет в рейтинге
     show_in_leaderboard: bool = Field(
         False,
