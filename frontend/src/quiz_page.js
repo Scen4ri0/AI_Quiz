@@ -71,7 +71,7 @@ export function initQuizPage({ quizId }) {
 
   function getBackendUrl() {
     const fromInput = (els.backendUrl.value || "").trim();
-    return fromInput || "http://localhost:8000";
+    return fromInput || "http://84.23.54.6:8000";
   }
 
   function lockUi(isLocked) {

@@ -10,7 +10,7 @@ const els = {
 
 function getBackendUrl() {
   const v = (els.backendUrl.value || "").trim();
-  return v || "http://localhost:8000";
+  return v || "http://84.23.54.6:8000";
 }
 
 function setResult(text, tone = "muted") {
@@ -77,7 +77,7 @@ async function refresh() {
 }
 
 function init() {
-  els.backendUrl.value = "http://localhost:8000";
+  els.backendUrl.value = "http://84.23.54.6:8000";
   els.btnRefresh.addEventListener("click", refresh);
   refresh();
 }
