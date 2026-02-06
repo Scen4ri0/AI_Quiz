@@ -56,32 +56,60 @@ QUIZ_TITLES: dict[str, str] = {
 
 app = FastAPI(title="AI Quiz Backend", version="0.9.0")
 
-# CORS:
-# - берем FRONTEND_ORIGIN из env (если задан),
-# - и добавляем статически нужные домены (scen4ri0.info)
+# -----------------------------
+# CORS (FIX)
+# -----------------------------
+# Почему было "Failed to fetch":
+# Origin у браузера = scheme+host+port (например http://scen4ri0.info:5173),
+# а у тебя был разрешён только http://scen4ri0.info (без порта),
+# поэтому preflight OPTIONS отклонялся как "Disallowed CORS origin". :contentReference[oaicite:2]{index=2}
+
+def _split_origins(raw: str) -> list[str]:
+    # Поддержка env вида: FRONTEND_ORIGINS="http://a:5173,https://b"
+    parts = [x.strip() for x in (raw or "").split(",")]
+    return [x for x in parts if x]
+
 frontend_origin = os.getenv("FRONTEND_ORIGIN", "http://localhost:5173").strip()
+extra_origins = _split_origins(os.getenv("FRONTEND_ORIGINS", "").strip())
 
 allow_origins = [
     frontend_origin,
+    *extra_origins,
+
+    # local dev
     "http://127.0.0.1:5173",
     "http://localhost:5173",
     "http://localhost:3000",
-    "https://scen4ri0.info",      # ✅ NEW
-    "https://www.scen4ri0.info",  # ✅ NEW (часто нужен)
-    "http://scen4ri0.info",       # ✅ NEW (если вдруг используешь без TLS)
-    "http://www.scen4ri0.info",   # ✅ NEW (если вдруг используешь без TLS)
+
+    # prod domains (без порта)
+    "https://scen4ri0.info",
+    "https://www.scen4ri0.info",
+    "http://scen4ri0.info",
+    "http://www.scen4ri0.info",
+
+    # IMPORTANT: Vite dev server на домене (с портом 5173)
+    "http://scen4ri0.info:5173",
+    "http://www.scen4ri0.info:5173",
+    "https://scen4ri0.info:5173",
+    "https://www.scen4ri0.info:5173",
 ]
 
-# Убираем возможные дубли/пустые строки (на случай env)
+# Убираем дубли/пустые строки
 allow_origins = [x for i, x in enumerate(allow_origins) if x and x not in allow_origins[:i]]
+
+# Regex-страховка: разрешаем localhost/127.0.0.1/scen4ri0(.info) с любым портом
+# (удобно, если порт Vite меняется). :contentReference[oaicite:3]{index=3}
+allow_origin_regex = r"^https?://(localhost|127\.0\.0\.1|scen4ri0\.info|www\.scen4ri0\.info)(:\d+)?$"
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allow_origins,
+    allow_origin_regex=allow_origin_regex,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+# -----------------------------
 
 DEBUG = os.getenv("DEBUG", "false").strip().lower() in {"1", "true", "yes", "y", "on"}
 
