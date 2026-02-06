@@ -93,6 +93,10 @@ def _sanitize_output(text: str, max_chars: int) -> str:
 
 
 def _extract_llm_content(resp: Any) -> str:
+    """
+    Универсально вытаскиваем текст из того, что вернул llm.invoke().
+    Работает для LangChain-сообщений и для dict/прочих структур.
+    """
     if resp is None:
         return ""
     content = getattr(resp, "content", None)
@@ -113,6 +117,31 @@ def _extract_llm_content(resp: Any) -> str:
         if isinstance(c, str):
             return c
     return str(resp).strip()
+
+
+def _llm_text(prompt: str, max_chars: int = 800, tries: int = 2) -> str:
+    """
+    ✅ FIX: Ранее final_feedback_safe() вызывал _llm_text(), но её не было -> NameError.
+    Тут делаем безопасный вызов LLM с несколькими попытками и нормализацией текста.
+    """
+    llm = get_llm()
+    last_text = ""
+    t = max(1, int(tries))
+
+    for _ in range(t):
+        try:
+            resp = llm.invoke(prompt)
+            text = _extract_llm_content(resp)
+            text = _sanitize_output(text, max_chars)
+            if text:
+                return text
+            last_text = text
+        except Exception:
+            # Не пробрасываем наружу — final_feedback_safe и так fallback-ит,
+            # а /api/final_feedback не должен падать из-за LLM.
+            continue
+
+    return _sanitize_output(last_text, max_chars)
 
 
 def _looks_like_definition_dump(text: str) -> bool:
@@ -249,10 +278,6 @@ def grade_answer(question: str, user_answer: str) -> GradeResult:
     return last
 
 
-# NOTE: в твоём фрагменте файла не было определения _llm_text.
-# Я оставляю final_feedback_safe как в твоём исходнике (с вызовом _llm_text),
-# но если _llm_text реально отсутствует в текущем backend/src/grader.py — будет NameError.
-# Тогда нужно будет добавить _llm_text (или заменить на llm.invoke + _extract_llm_content).
 def final_feedback_safe(correct: int, answered: int, total: int, pass_score: int) -> FinalFeedbackOut:
     total = max(1, int(total))
     answered = max(0, min(int(answered), total))
@@ -283,7 +308,7 @@ passed: {str(passed).lower()}
 Верни только текст (без JSON).
 """.strip()
 
-    msg = _llm_text(prompt, max_chars=800, tries=2)  # type: ignore[name-defined]
+    msg = _llm_text(prompt, max_chars=800, tries=2)
     if not msg:
         msg = "Не получилось собрать итоговый фидбек 😅 Попробуй ещё раз."
 
