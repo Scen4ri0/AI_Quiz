@@ -3,7 +3,7 @@ set -e
 
 echo "[*] Starting backend..."
 cd backend
-source venv/bin/activate
+source .venv/bin/activate
 nohup uvicorn src.main:app \
   --host 0.0.0.0 \
   --port 8000 \
