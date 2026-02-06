@@ -507,8 +507,7 @@ export function initQuizPage({ quizId }) {
   }
 
   function init() {
-    els.backendUrl.value = "http://localhost:8000";
-
+    els.backendUrl.value = "http://scen4ri0.info:8000"
     state.profile = loadProfile();
     state.progress = loadProgress();
     state.final = loadFinal();
