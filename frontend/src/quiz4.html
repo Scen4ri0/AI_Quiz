@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI Quiz — Test 4</title>
+  </head>
+  <body>
+    <div id="app">
+      <header class="header">
+        <h1>📚 Тест 4</h1>
+        <p class="muted">RAG основы / Retrieval / Semantic Search</p>
+      </header>
+
+      <section class="card">
+        <div class="row">
+          <a class="linkbtn" href="/index.html">← Домой</a>
+          <a class="linkbtn" href="/leaderboard.html">🏆 Лидеры</a>
+          <span class="muted small">quiz_id: <code>quiz4</code></span>
+        </div>
+      </section>
+
+      <!-- START CARD -->
+      <section class="card" id="start-card">
+        <div class="muted small">Перед стартом</div>
+
+        <div class="row">
+          <label class="inline">
+            Никнейм (опционально):
+            <input id="nickname" type="text" placeholder="например: scen4ri0 (или оставь пустым)" maxlength="40" />
+          </label>
+
+          <label class="inline">
+            Backend URL:
+            <input id="backend-url" type="text" placeholder="http://84.23.54.6:8000" />
+          </label>
+
+          <label class="inline">
+            <input id="show-in-leaderboard" type="checkbox" />
+            Показывать в рейтинге
+          </label>
+
+          <button id="btn-start" type="button">🚀 Начать</button>
+        </div>
+
+        <div class="muted small" id="start-hint">
+          Ник можно не вводить — пройдёшь как гость и в рейтинг не попадёшь. Чтобы попасть в рейтинг, включи галочку и укажи ник.
+        </div>
+      </section>
+
+      <!-- QUIZ CARD -->
+      <section class="card" id="quiz-card" style="display:none;">
+        <div class="row">
+          <div class="row">
+            <button id="btn-prev" type="button">← Назад</button>
+            <button id="btn-next" type="button">Дальше →</button>
+            <button id="btn-finish" type="button">🏁 Завершить тест</button>
+          </div>
+
+          <div class="muted small" id="whoami">Игрок: —</div>
+          <div class="muted small" id="progress">Вопрос: —</div>
+          <div class="muted small" id="scoreline">Счёт: —</div>
+
+          <div class="progressbar" aria-hidden="true">
+            <div class="progressbar-fill" id="progressbar-fill"></div>
+          </div>
+
+          <button id="btn-reload" type="button">Перезагрузить список</button>
+          <button id="btn-reset-progress" type="button">Сбросить прогресс</button>
+          <button id="btn-leaderboard" type="button">🏆 Обновить рейтинг</button>
+        </div>
+
+        <div class="question-block">
+          <div class="muted small">Вопрос</div>
+          <div id="question-text" class="question-text">Загрузка…</div>
+          <div id="question-id" class="muted small"></div>
+          <div id="question-status" class="muted small"></div>
+        </div>
+
+        <form id="answer-form" class="answer-form">
+          <label class="muted small" for="answer">Ваш ответ (суть)</label>
+          <textarea id="answer" rows="6" placeholder="Напишите 1–2 ключевые идеи..."></textarea>
+
+          <div class="row">
+            <button id="btn-grade" type="submit">Проверить</button>
+            <button id="btn-clear" type="button">Очистить</button>
+          </div>
+        </form>
+      </section>
+
+      <!-- RESULT CARD -->
+      <section class="card">
+        <div class="muted small">Результат</div>
+        <div id="result" class="result muted">Пока нет результата.</div>
+      </section>
+
+      <!-- LEADERBOARD CARD -->
+      <section class="card" id="leaderboard-card" style="display:none;">
+        <div class="row" style="justify-content:space-between;">
+          <div>
+            <div class="muted small">Рейтинг (топ)</div>
+            <div class="muted small">Сортировка: лучший correct, потом answered, потом свежесть</div>
+          </div>
+        </div>
+
+        <div id="leaderboard" class="leaderboard muted small">
+          Пока пусто.
+        </div>
+      </section>
+
+      <footer class="footer muted small">
+        <span>Подсказка: backend по умолчанию <code>http://84.23.54.6:8000</code></span>
+      </footer>
+    </div>
+
+    <script type="module" src="/quiz4.js"></script>
+  </body>
+</html>

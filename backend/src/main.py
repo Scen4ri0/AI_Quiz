@@ -24,7 +24,8 @@ except Exception:
 BASE_DIR = Path(__file__).resolve().parent
 QUESTIONS_QUIZ1_PATH = BASE_DIR / "questions.json"
 QUESTIONS_QUIZ2_PATH = BASE_DIR / "questions_quiz2.json"
-QUESTIONS_QUIZ3_PATH = BASE_DIR / "questions_quiz3.json"  # ✅ NEW
+QUESTIONS_QUIZ3_PATH = BASE_DIR / "questions_quiz3.json"
+QUESTIONS_QUIZ4_PATH = BASE_DIR / "questions_quiz4.json"  # ✅ NEW
 
 PASS_SCORE = int(os.getenv("PASS_SCORE", "8"))
 
@@ -42,21 +43,41 @@ def _load_questions_file(path: Path) -> list[dict[str, Any]]:
 QUESTIONS_BY_QUIZ: dict[str, list[dict[str, Any]]] = {
     "quiz1": _load_questions_file(QUESTIONS_QUIZ1_PATH),
     "quiz2": _load_questions_file(QUESTIONS_QUIZ2_PATH),
-    "quiz3": _load_questions_file(QUESTIONS_QUIZ3_PATH),  # ✅ NEW
+    "quiz3": _load_questions_file(QUESTIONS_QUIZ3_PATH),
+    "quiz4": _load_questions_file(QUESTIONS_QUIZ4_PATH),
 }
 
 QUIZ_TITLES: dict[str, str] = {
     "quiz1": "Тест 1 (LLM основы)",
     "quiz2": "Тест 2 (RAG / Vector DB / Agents)",
-    "quiz3": "Тест 3 (Embeddings / BoW / Semantic Search)",  # ✅ NEW
+    "quiz3": "Тест 3 (Embeddings / BoW / Semantic Search)",
+    "quiz4": "Тест 4 (RAG основы / Retrieval / Semantic Search)",
 }
 
 app = FastAPI(title="AI Quiz Backend", version="0.9.0")
 
-frontend_origin = os.getenv("FRONTEND_ORIGIN", "http://localhost:5173")
+# CORS:
+# - берем FRONTEND_ORIGIN из env (если задан),
+# - и добавляем статически нужные домены (scen4ri0.info)
+frontend_origin = os.getenv("FRONTEND_ORIGIN", "http://localhost:5173").strip()
+
+allow_origins = [
+    frontend_origin,
+    "http://127.0.0.1:5173",
+    "http://localhost:5173",
+    "http://localhost:3000",
+    "https://scen4ri0.info",      # ✅ NEW
+    "https://www.scen4ri0.info",  # ✅ NEW (часто нужен)
+    "http://scen4ri0.info",       # ✅ NEW (если вдруг используешь без TLS)
+    "http://www.scen4ri0.info",   # ✅ NEW (если вдруг используешь без TLS)
+]
+
+# Убираем возможные дубли/пустые строки (на случай env)
+allow_origins = [x for i, x in enumerate(allow_origins) if x and x not in allow_origins[:i]]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[frontend_origin, "http://127.0.0.1:5173", "http://localhost:3000"],
+    allow_origins=allow_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -101,15 +122,13 @@ class QuizzesOut(BaseModel):
 
 
 class StartIn(BaseModel):
-    # ✅ nickname теперь НЕ обязательный
     nickname: str | None = Field(
         None,
         min_length=0,
         max_length=40,
         description="Имя/ник без пароля. Можно не вводить — будет гостевой проход.",
     )
-    quiz_id: str = Field("quiz1", description="ID теста: quiz1, quiz2 или quiz3")
-    # ✅ флаг: показывать или нет в рейтинге
+    quiz_id: str = Field("quiz1", description="ID теста: quiz1, quiz2, quiz3 или quiz4")
     show_in_leaderboard: bool = Field(
         False,
         description="Если true — попытка будет учитываться в лидерборде. Если nickname пустой, всегда false.",
@@ -202,14 +221,12 @@ def list_questions(quiz: str = "quiz1") -> QuestionsListOut:
 
 @app.post("/api/start", response_model=StartOut)
 def start(payload: StartIn) -> StartOut:
-    # ✅ nickname может быть пустым/None
     raw = (payload.nickname or "").strip()
-    nickname = " ".join(raw.split())  # нормализация пробелов
+    nickname = " ".join(raw.split())
 
     quiz_id = _require_quiz_id(payload.quiz_id)
     total = len(QUESTIONS_BY_QUIZ[quiz_id])
 
-    # ✅ если ника нет — это всегда "скрытый" гостевой проход
     show = bool(payload.show_in_leaderboard) and bool(nickname)
 
     try:
