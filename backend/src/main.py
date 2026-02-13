@@ -25,7 +25,8 @@ BASE_DIR = Path(__file__).resolve().parent
 QUESTIONS_QUIZ1_PATH = BASE_DIR / "questions.json"
 QUESTIONS_QUIZ2_PATH = BASE_DIR / "questions_quiz2.json"
 QUESTIONS_QUIZ3_PATH = BASE_DIR / "questions_quiz3.json"
-QUESTIONS_QUIZ4_PATH = BASE_DIR / "questions_quiz4.json"  # ✅ NEW
+QUESTIONS_QUIZ4_PATH = BASE_DIR / "questions_quiz4.json"
+QUESTIONS_QUIZ5_PATH = BASE_DIR / "questions_quiz5.json"  # ✅ NEW
 
 PASS_SCORE = int(os.getenv("PASS_SCORE", "8"))
 
@@ -45,6 +46,7 @@ QUESTIONS_BY_QUIZ: dict[str, list[dict[str, Any]]] = {
     "quiz2": _load_questions_file(QUESTIONS_QUIZ2_PATH),
     "quiz3": _load_questions_file(QUESTIONS_QUIZ3_PATH),
     "quiz4": _load_questions_file(QUESTIONS_QUIZ4_PATH),
+    "quiz5": _load_questions_file(QUESTIONS_QUIZ5_PATH),  # ✅ NEW
 }
 
 QUIZ_TITLES: dict[str, str] = {
@@ -52,22 +54,20 @@ QUIZ_TITLES: dict[str, str] = {
     "quiz2": "Тест 2 (RAG / Vector DB / Agents)",
     "quiz3": "Тест 3 (Embeddings / BoW / Semantic Search)",
     "quiz4": "Тест 4 (RAG основы / Retrieval / Semantic Search)",
+    "quiz5": "Тест 5 (AI-агенты / MCP)",  # ✅ NEW
 }
 
 app = FastAPI(title="AI Quiz Backend", version="0.9.0")
 
 # -----------------------------
-# CORS (FIX)
+# CORS
 # -----------------------------
-# Почему было "Failed to fetch":
-# Origin у браузера = scheme+host+port (например http://scen4ri0.info:5173),
-# а у тебя был разрешён только http://scen4ri0.info (без порта),
-# поэтому preflight OPTIONS отклонялся как "Disallowed CORS origin". :contentReference[oaicite:2]{index=2}
 
 def _split_origins(raw: str) -> list[str]:
     # Поддержка env вида: FRONTEND_ORIGINS="http://a:5173,https://b"
     parts = [x.strip() for x in (raw or "").split(",")]
     return [x for x in parts if x]
+
 
 frontend_origin = os.getenv("FRONTEND_ORIGIN", "http://localhost:5173").strip()
 extra_origins = _split_origins(os.getenv("FRONTEND_ORIGINS", "").strip())
@@ -98,7 +98,6 @@ allow_origins = [
 allow_origins = [x for i, x in enumerate(allow_origins) if x and x not in allow_origins[:i]]
 
 # Regex-страховка: разрешаем localhost/127.0.0.1/scen4ri0(.info) с любым портом
-# (удобно, если порт Vite меняется). :contentReference[oaicite:3]{index=3}
 allow_origin_regex = r"^https?://(localhost|127\.0\.0\.1|scen4ri0\.info|www\.scen4ri0\.info)(:\d+)?$"
 
 app.add_middleware(
@@ -156,7 +155,7 @@ class StartIn(BaseModel):
         max_length=40,
         description="Имя/ник без пароля. Можно не вводить — будет гостевой проход.",
     )
-    quiz_id: str = Field("quiz1", description="ID теста: quiz1, quiz2, quiz3 или quiz4")
+    quiz_id: str = Field("quiz1", description="ID теста: quiz1, quiz2, quiz3, quiz4 или quiz5")
     show_in_leaderboard: bool = Field(
         False,
         description="Если true — попытка будет учитываться в лидерборде. Если nickname пустой, всегда false.",

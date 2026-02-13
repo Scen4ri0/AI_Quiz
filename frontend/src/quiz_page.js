@@ -71,7 +71,7 @@ export function initQuizPage({ quizId }) {
 
   function getBackendUrl() {
     const fromInput = (els.backendUrl.value || "").trim();
-    return fromInput || "http://84.23.54.6:8000";
+    return fromInput || "http://scen4ri0.info:8000";
   }
 
   function lockUi(isLocked) {
@@ -507,7 +507,7 @@ export function initQuizPage({ quizId }) {
   }
 
   function init() {
-    els.backendUrl.value = "http://scen4ri0.info:8000"
+    els.backendUrl.value = "http://scen4ri0.info:8000";
     state.profile = loadProfile();
     state.progress = loadProgress();
     state.final = loadFinal();
